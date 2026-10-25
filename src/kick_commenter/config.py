@@ -1,8 +1,9 @@
 """Application settings, read from environment variables or a local .env file."""
 
 from pathlib import Path
+from typing import Self
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +27,13 @@ class Settings(BaseSettings):
     redirect_port: int = Field(default=8765, gt=0, lt=65536)
     login_timeout_seconds: float = Field(default=300, gt=0)
 
+    @model_validator(mode="after")
+    def _warning_before_timeout(self) -> Self:
+        if self.idle_warning_minutes >= self.idle_timeout_minutes:
+            msg = "idle_warning_minutes must be smaller than idle_timeout_minutes"
+            raise ValueError(msg)
+        return self
+
     @property
     def redirect_uri(self) -> str:
         """The callback URL registered in the Kick developer app."""
@@ -45,3 +53,8 @@ class Settings(BaseSettings):
     def channels_file(self) -> Path:
         """Where resolved channel ids are cached."""
         return self.data_dir / "channels.json"
+
+    @property
+    def locks_dir(self) -> Path:
+        """Where running sessions mark the channels they hold."""
+        return self.data_dir / "locks"
