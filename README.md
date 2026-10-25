@@ -66,6 +66,12 @@ Run it as often as you like; every run adds to the same local history. To see wh
 uv run kick-commenter languages <channel>
 ```
 
+To see what it has learned about how the chat talks (its words, phrases, nicknames, emotes and style):
+
+```bash
+uv run kick-commenter profile <channel>
+```
+
 To run a session with one of your bots, add the bot once and then start it in a channel:
 
 ```bash

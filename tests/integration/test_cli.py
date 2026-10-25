@@ -260,6 +260,45 @@ def test_languages_with_only_short_messages(
     assert "Not enough saved chat for quiet yet (1 messages)." in result.output
 
 
+def test_profile_learns_from_saved_chat_and_saves_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, chat_message: ChatMessage
+) -> None:
+    monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
+    ChannelLookup(httpx.AsyncClient(), tmp_path / "channels.json").remember(
+        ChannelIds(slug="thetoxicparty", channel_id=chat_message.channel_id, chatroom_id=1)
+    )
+    store = ChatStore(tmp_path / "chat.sqlite3")
+    lines = (Path(__file__).parent.parent / "fixtures" / "community_chat.txt").read_text(
+        encoding="utf-8"
+    )
+    for n, text in enumerate(lines.splitlines()):
+        store.save_message(chat_message.model_copy(update={"message_id": str(n), "text": text}))
+    store.close()
+
+    result = runner.invoke(app, ["profile", "thetoxicparty"])
+
+    assert result.exit_code == 0, result.output
+    assert "thetoxicparty: learned from 240 messages." in result.output
+    assert "Main language: tr" in result.output
+    assert "How they address people: reis, kral, abi" in result.output
+    assert "Favorite emotes: KEKW, LUL" in result.output
+    assert (tmp_path / "profiles" / "thetoxicparty.json").exists()
+
+
+def test_profile_with_no_chat_yet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
+    ChannelLookup(httpx.AsyncClient(), tmp_path / "channels.json").remember(
+        ChannelIds(slug="quiet", channel_id=5, chatroom_id=1)
+    )
+
+    result = runner.invoke(app, ["profile", "quiet"])
+
+    assert result.exit_code == 0, result.output
+    assert "learned from 0 messages" in result.output
+    assert "Their words: (not enough chat yet)" in result.output
+    assert "Favorite emotes: (none yet)" in result.output
+
+
 def save_chat(tmp_path: Path, chat_message: ChatMessage, slug: str, texts: list[str]) -> None:
     ChannelLookup(httpx.AsyncClient(), tmp_path / "channels.json").remember(
         ChannelIds(slug=slug, channel_id=chat_message.channel_id, chatroom_id=1)
