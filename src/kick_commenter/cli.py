@@ -1,19 +1,21 @@
 """Command-line entry point."""
 
 import asyncio
+import os
 import webbrowser
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 from typing import Annotated
 
 import httpx
 import typer
 
 from kick_commenter import __version__
-from kick_commenter.collector.collector import Collector
+from kick_commenter.collector.collector import Collector, CollectorStats
 from kick_commenter.collector.lookup import ChannelIds, ChannelLookup, ChannelLookupError
 from kick_commenter.collector.pusher import PusherChatSource
 from kick_commenter.config import Settings
-from kick_commenter.kick.bots import BotRegistry
+from kick_commenter.kick.bots import BotAccount, BotRegistry
 from kick_commenter.kick.callback import wait_for_code
 from kick_commenter.kick.client import KickApi
 from kick_commenter.kick.errors import KickError
@@ -22,6 +24,11 @@ from kick_commenter.kick.oauth import OAuthClient, utc_now
 from kick_commenter.kick.token_store import KeyringTokenStore
 from kick_commenter.kick.tokens import AppTokenProvider
 from kick_commenter.models import ChatMessage
+from kick_commenter.session.commands import HELP_TEXT
+from kick_commenter.session.idle import IdleTimer, minutes
+from kick_commenter.session.lock import ChannelBusyError, ChannelLock, LockInfo
+from kick_commenter.session.session import Session, StopReason
+from kick_commenter.session.terminal import typed_lines
 from kick_commenter.storage.chat_store import ChatStore
 
 app = typer.Typer(help="A friendly chat companion for Kick streams.", no_args_is_help=True)
@@ -29,6 +36,12 @@ bots_app = typer.Typer(help="Manage the bot accounts sessions can use.", no_args
 app.add_typer(bots_app, name="bots")
 
 HTTP_TIMEOUT = httpx.Timeout(10.0)
+
+ChatroomIdOption = Annotated[
+    int | None, typer.Option(help="Skip the lookup: the channel's chatroom id.")
+]
+ChannelIdOption = Annotated[int | None, typer.Option(help="Skip the lookup: the channel's id.")]
+QuietOption = Annotated[bool, typer.Option(help="Don't print each message.")]
 
 
 @app.command()
@@ -64,37 +77,20 @@ def channel(slug: str) -> None:
 @app.command()
 def collect(
     slug: str,
-    chatroom_id: Annotated[
-        int | None, typer.Option(help="Skip the lookup: the channel's chatroom id.")
-    ] = None,
-    channel_id: Annotated[
-        int | None, typer.Option(help="Skip the lookup: the channel's id.")
-    ] = None,
-    quiet: Annotated[bool, typer.Option(help="Don't print each message.")] = False,
+    chatroom_id: ChatroomIdOption = None,
+    channel_id: ChannelIdOption = None,
+    quiet: QuietOption = False,
 ) -> None:
     """Read a channel's chat and save it locally. Read-only; stop with Ctrl+C."""
     config = Settings()
     store = ChatStore(config.chat_db)
-
-    def show(message: ChatMessage) -> None:
-        if not quiet:
-            typer.echo(f"{message.sender.username}: {message.text}")
-
     collector: Collector | None = None
 
     async def main() -> None:
         nonlocal collector
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as http:
-            lookup = ChannelLookup(http, config.channels_file)
-            if chatroom_id is not None and channel_id is not None:
-                ids = ChannelIds(slug=slug.lower(), channel_id=channel_id, chatroom_id=chatroom_id)
-                lookup.remember(ids)
-            else:
-                ids = await lookup.resolve(slug)
+        ids = await _resolve_channel(config, slug, chatroom_id, channel_id)
         typer.echo(f"Collecting {ids.slug} (read-only). Press Ctrl+C to stop.")
-        collector = Collector(
-            PusherChatSource(ids.chatroom_id, ids.channel_id), store, on_message=show
-        )
+        collector = _collector(ids, store, quiet=quiet)
         await collector.run(asyncio.Event())
 
     try:
@@ -107,11 +103,67 @@ def collect(
     finally:
         store.close()
     if collector is not None:
+        typer.echo(f"Stopped. {_summary(collector.stats)}")
+
+
+@app.command()
+def start(  # noqa: PLR0913, PLR0917 - one parameter per CLI option
+    slug: str,
+    bot: Annotated[str | None, typer.Option(help="Which saved bot to use.")] = None,
+    idle_minutes: Annotated[
+        int | None, typer.Option(min=2, help="Stop after this many minutes without input.")
+    ] = None,
+    chatroom_id: ChatroomIdOption = None,
+    channel_id: ChannelIdOption = None,
+    quiet: QuietOption = False,
+) -> None:
+    """Start a session in a channel. It stops by itself when you stop answering."""
+    config = Settings()
+    account = _pick_bot(config, bot)
+    if KeyringTokenStore().load(account.token_key) is None:
+        typer.echo(f"No saved login for {account.name}. Run: kick-commenter bots add")
+        raise typer.Exit(1)
+    timeout = timedelta(minutes=idle_minutes or config.idle_timeout_minutes)
+    warning = min(timedelta(minutes=config.idle_warning_minutes), timeout / 2)
+    store = ChatStore(config.chat_db)
+    collector: Collector | None = None
+
+    async def main(channel: str) -> StopReason:
+        nonlocal collector
+        ids = await _resolve_channel(config, channel, chatroom_id, channel_id)
+        collector = _collector(ids, store, quiet=quiet)
         stats = collector.stats
-        typer.echo(
-            f"Stopped. Saved {stats.messages} messages and {stats.events} events "
-            f"({stats.reconnects} reconnects)."
+        session = Session(
+            collector.run,
+            IdleTimer(timeout=timeout, warning=warning, last_input=utc_now()),
+            clock=utc_now,
+            say=typer.echo,
+            status=lambda: f"Listening in {ids.slug} as {account.name}. {_summary(stats)}",
         )
+        typer.echo(
+            f"Session started in {ids.slug} as {account.name}. Dry run: nothing is posted yet.\n"
+            f"It stops after {minutes(timeout)} min without input. {HELP_TEXT}"
+        )
+        return await session.run(typed_lines())
+
+    channel = slug.removeprefix("@").lower()
+    lock = ChannelLock(
+        config.locks_dir,
+        channel,
+        LockInfo(pid=os.getpid(), bot=account.name, started_at=utc_now()),
+    )
+    try:
+        with lock:
+            asyncio.run(main(channel))
+    except (ChannelBusyError, ChannelLookupError) as error:
+        typer.echo(str(error))
+        raise typer.Exit(1) from None
+    except KeyboardInterrupt:
+        pass
+    finally:
+        store.close()
+    if collector is not None:
+        typer.echo(f"Session ended. {_summary(collector.stats)}")
 
 
 @bots_app.command("add")
@@ -167,6 +219,57 @@ def bots_remove(name: str) -> None:
         typer.echo(f"Removed bot {bot.name}.")
 
     _run_with_kick(run)
+
+
+def _pick_bot(config: Settings, name: str | None) -> BotAccount:
+    registry = BotRegistry(config.bots_file)
+    if name is not None:
+        try:
+            return registry.get(name)
+        except KeyError:
+            typer.echo(f"No bot named {name!r}. See: kick-commenter bots list")
+            raise typer.Exit(1) from None
+    bots = registry.all()
+    if len(bots) == 1:
+        return bots[0]
+    if not bots:
+        typer.echo("No bots yet. Add one with: kick-commenter bots add")
+    else:
+        names = ", ".join(b.name for b in bots)
+        typer.echo(f"Pick a bot with --bot. Saved bots: {names}")
+    raise typer.Exit(1)
+
+
+async def _resolve_channel(
+    config: Settings, slug: str, chatroom_id: int | None, channel_id: int | None
+) -> ChannelIds:
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as http:
+        lookup = ChannelLookup(http, config.channels_file)
+        if chatroom_id is None or channel_id is None:
+            return await lookup.resolve(slug)
+        ids = ChannelIds(
+            slug=slug.removeprefix("@").lower(), channel_id=channel_id, chatroom_id=chatroom_id
+        )
+        lookup.remember(ids)
+        return ids
+
+
+def _collector(ids: ChannelIds, store: ChatStore, *, quiet: bool) -> Collector:
+    def show(message: ChatMessage) -> None:
+        typer.echo(f"{message.sender.username}: {message.text}")
+
+    return Collector(
+        PusherChatSource(ids.chatroom_id, ids.channel_id),
+        store,
+        on_message=None if quiet else show,
+    )
+
+
+def _summary(stats: CollectorStats) -> str:
+    return (
+        f"Saved {stats.messages} messages and {stats.events} events "
+        f"({stats.reconnects} reconnects)."
+    )
 
 
 def _run_with_kick(

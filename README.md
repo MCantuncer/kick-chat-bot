@@ -60,6 +60,15 @@ To start building up a picture of a channel's chat, run the read-only collector.
 uv run kick-commenter collect <channel>
 ```
 
+To run a session with one of your bots, add the bot once and then start it in a channel:
+
+```bash
+uv run kick-commenter bots add
+uv run kick-commenter start <channel> --bot <name>
+```
+
+A session runs only while you want it to. It stops by itself after a while without input (two hours by default). Type `continue` to keep it going, `status` to see what it's doing, or `stop` to end it. Only one bot can run in a channel at a time.
+
 ## Development
 
 ```bash
