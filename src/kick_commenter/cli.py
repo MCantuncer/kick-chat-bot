@@ -3,11 +3,15 @@
 import asyncio
 import webbrowser
 from collections.abc import Awaitable, Callable
+from typing import Annotated
 
 import httpx
 import typer
 
 from kick_commenter import __version__
+from kick_commenter.collector.collector import Collector
+from kick_commenter.collector.lookup import ChannelIds, ChannelLookup, ChannelLookupError
+from kick_commenter.collector.pusher import PusherChatSource
 from kick_commenter.config import Settings
 from kick_commenter.kick.bots import BotRegistry
 from kick_commenter.kick.callback import wait_for_code
@@ -17,6 +21,8 @@ from kick_commenter.kick.login import add_bot, remove_bot
 from kick_commenter.kick.oauth import OAuthClient, utc_now
 from kick_commenter.kick.token_store import KeyringTokenStore
 from kick_commenter.kick.tokens import AppTokenProvider
+from kick_commenter.models import ChatMessage
+from kick_commenter.storage.chat_store import ChatStore
 
 app = typer.Typer(help="A friendly chat companion for Kick streams.", no_args_is_help=True)
 bots_app = typer.Typer(help="Manage the bot accounts sessions can use.", no_args_is_help=True)
@@ -53,6 +59,59 @@ def channel(slug: str) -> None:
         typer.echo(f"{match.slug}: broadcaster id {match.broadcaster_user_id}, {status}")
 
     _run_with_kick(run)
+
+
+@app.command()
+def collect(
+    slug: str,
+    chatroom_id: Annotated[
+        int | None, typer.Option(help="Skip the lookup: the channel's chatroom id.")
+    ] = None,
+    channel_id: Annotated[
+        int | None, typer.Option(help="Skip the lookup: the channel's id.")
+    ] = None,
+    quiet: Annotated[bool, typer.Option(help="Don't print each message.")] = False,
+) -> None:
+    """Read a channel's chat and save it locally. Read-only; stop with Ctrl+C."""
+    config = Settings()
+    store = ChatStore(config.chat_db)
+
+    def show(message: ChatMessage) -> None:
+        if not quiet:
+            typer.echo(f"{message.sender.username}: {message.text}")
+
+    collector: Collector | None = None
+
+    async def main() -> None:
+        nonlocal collector
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as http:
+            lookup = ChannelLookup(http, config.channels_file)
+            if chatroom_id is not None and channel_id is not None:
+                ids = ChannelIds(slug=slug.lower(), channel_id=channel_id, chatroom_id=chatroom_id)
+                lookup.remember(ids)
+            else:
+                ids = await lookup.resolve(slug)
+        typer.echo(f"Collecting {ids.slug} (read-only). Press Ctrl+C to stop.")
+        collector = Collector(
+            PusherChatSource(ids.chatroom_id, ids.channel_id), store, on_message=show
+        )
+        await collector.run(asyncio.Event())
+
+    try:
+        asyncio.run(main())
+    except ChannelLookupError as error:
+        typer.echo(str(error))
+        raise typer.Exit(1) from None
+    except KeyboardInterrupt:
+        pass
+    finally:
+        store.close()
+    if collector is not None:
+        stats = collector.stats
+        typer.echo(
+            f"Stopped. Saved {stats.messages} messages and {stats.events} events "
+            f"({stats.reconnects} reconnects)."
+        )
 
 
 @bots_app.command("add")

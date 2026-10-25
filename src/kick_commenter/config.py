@@ -35,3 +35,13 @@ class Settings(BaseSettings):
     def bots_file(self) -> Path:
         """Where the bot list is saved."""
         return self.data_dir / "bots.json"
+
+    @property
+    def chat_db(self) -> Path:
+        """Where collected chat is stored."""
+        return self.data_dir / "chat.sqlite3"
+
+    @property
+    def channels_file(self) -> Path:
+        """Where resolved channel ids are cached."""
+        return self.data_dir / "channels.json"
