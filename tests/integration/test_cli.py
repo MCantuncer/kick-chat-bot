@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
+from datetime import timedelta
 from pathlib import Path
 
 import httpx
@@ -257,3 +258,53 @@ def test_languages_with_only_short_messages(
 
     assert result.exit_code == 0
     assert "Not enough saved chat for quiet yet (1 messages)." in result.output
+
+
+def save_chat(tmp_path: Path, chat_message: ChatMessage, slug: str, texts: list[str]) -> None:
+    ChannelLookup(httpx.AsyncClient(), tmp_path / "channels.json").remember(
+        ChannelIds(slug=slug, channel_id=chat_message.channel_id, chatroom_id=1)
+    )
+    store = ChatStore(tmp_path / "chat.sqlite3")
+    for n, text in enumerate(texts):
+        sent_at = chat_message.sent_at + timedelta(seconds=3 * n)
+        store.save_message(
+            chat_message.model_copy(update={"message_id": str(n), "text": text, "sent_at": sent_at})
+        )
+    store.close()
+
+
+def test_warmup_reports_a_settled_channel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, chat_message: ChatMessage
+) -> None:
+    monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
+    save_chat(tmp_path, chat_message, "thetoxicparty", ["helal olsun reis", "aynen kral"] * 300)
+
+    result = runner.invoke(app, ["warmup", "thetoxicparty"])
+
+    assert result.exit_code == 0, result.output
+    assert "thetoxicparty: 600/500 messages, 28/10 min listened" in result.output
+    assert "Warm-up done" in result.output
+
+
+def test_warmup_reports_progress_while_still_listening(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, chat_message: ChatMessage
+) -> None:
+    monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
+    save_chat(tmp_path, chat_message, "quiet", ["helal olsun reis"] * 50)
+
+    result = runner.invoke(app, ["warmup", "quiet"])
+
+    assert result.exit_code == 0, result.output
+    assert (
+        "quiet: 50/500 messages, 2/10 min listened, 0/3 calm stretches in a row." in result.output
+    )
+    assert "Still warming up" in result.output
+
+
+def test_warmup_needs_collected_chat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
+
+    result = runner.invoke(app, ["warmup", "ghost"])
+
+    assert result.exit_code == 1
+    assert "collect ghost" in result.output
