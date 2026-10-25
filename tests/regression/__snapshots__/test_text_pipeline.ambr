@@ -1,0 +1,120 @@
+# serializer version: 1
+# name: test_messy_chat_is_read_consistently
+  list([
+    dict({
+      'emote_only': False,
+      'language': 'tr',
+      'text': 'LOBİ İÇİN NEMESİS SERHAT REİSİN TAKIM KURMASI LAZIM',
+      'tokens': list([
+        'lobi',
+        'için',
+        'nemesis',
+        'serhat',
+        'reisin',
+        'takım',
+        'kurması',
+        'lazım',
+      ]),
+    }),
+    dict({
+      'emote_only': False,
+      'language': None,
+      'text': 'helal olsun reiiiiiisss [emote:37226:KEKW] [emote:37226:KEKW]',
+      'tokens': list([
+        'helal',
+        'olsun',
+        'reiiss',
+        '<emote:KEKW>',
+        '<emote:KEKW>',
+      ]),
+    }),
+    dict({
+      'emote_only': False,
+      'language': None,
+      'text': '@viewer_b aynen kral 😂😂😂',
+      'tokens': list([
+        '<user>',
+        'aynen',
+        'kral',
+      ]),
+    }),
+    dict({
+      'emote_only': False,
+      'language': None,
+      'text': 'gg',
+      'tokens': list([
+        'gg',
+      ]),
+    }),
+    dict({
+      'emote_only': False,
+      'language': 'en',
+      'text': 'what a clutch brooo',
+      'tokens': list([
+        'what',
+        'a',
+        'clutch',
+        'broo',
+      ]),
+    }),
+    dict({
+      'emote_only': False,
+      'language': 'tr',
+      'text': '𝓻𝓮𝓲𝓼 𝓫𝓾𝓰𝓾𝓷 𝓫𝓪𝓼𝓴𝓪',
+      'tokens': list([
+        'reis',
+        'bugun',
+        'baska',
+      ]),
+    }),
+    dict({
+      'emote_only': False,
+      'language': None,
+      'text': 'r̷̡̛e̶̢͝i̵̡͘s̴̨̛ zalgo geldi',
+      'tokens': list([
+        'reis',
+        'zalgo',
+        'geldi',
+      ]),
+    }),
+    dict({
+      'emote_only': False,
+      'language': 'tr',
+      'text': 'https://kick.com/clip/abc bu klibe bakın',
+      'tokens': list([
+        '<url>',
+        'bu',
+        'klibe',
+        'bakın',
+      ]),
+    }),
+    dict({
+      'emote_only': False,
+      'language': 'tr',
+      'text': "Serhat'ın takımı 3-0 kazandı!!!",
+      'tokens': list([
+        "serhat'ın",
+        'takımı',
+        '3',
+        '0',
+        'kazandı',
+      ]),
+    }),
+    dict({
+      'emote_only': False,
+      'language': None,
+      'text': '?????',
+      'tokens': list([
+      ]),
+    }),
+    dict({
+      'emote_only': True,
+      'language': None,
+      'text': '[emote:1:GG][emote:2:LUL]',
+      'tokens': list([
+        '<emote:GG>',
+        '<emote:LUL>',
+      ]),
+    }),
+  ])
+# ---

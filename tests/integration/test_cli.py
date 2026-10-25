@@ -8,8 +8,10 @@ from typer.testing import CliRunner
 
 from kick_commenter import __version__, cli
 from kick_commenter.cli import app
+from kick_commenter.collector.lookup import ChannelIds, ChannelLookup
 from kick_commenter.kick.bots import BotAccount, BotRegistry
 from kick_commenter.models import ChatMessage
+from kick_commenter.storage.chat_store import ChatStore
 
 from ..unit.kick.factories import NOW
 
@@ -208,3 +210,50 @@ def test_collect_connects_to_the_current_stream_app(
 
     assert result.exit_code == 0, result.output
     assert urls[0].startswith(expected_url)
+
+
+def test_languages_needs_collected_chat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
+
+    result = runner.invoke(app, ["languages", "thetoxicparty"])
+
+    assert result.exit_code == 1
+    assert "collect thetoxicparty" in result.output
+
+
+def test_languages_reports_the_channel_mix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, chat_message: ChatMessage
+) -> None:
+    monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
+    ChannelLookup(httpx.AsyncClient(), tmp_path / "channels.json").remember(
+        ChannelIds(slug="thetoxicparty", channel_id=chat_message.channel_id, chatroom_id=1)
+    )
+    store = ChatStore(tmp_path / "chat.sqlite3")
+    texts = ["helal olsun reis bugün çok iyi oynadın"] * 30 + ["gg"] * 5
+    for n, text in enumerate(texts):
+        store.save_message(chat_message.model_copy(update={"message_id": str(n), "text": text}))
+    store.close()
+
+    result = runner.invoke(app, ["languages", "@TheToxicParty"])
+
+    assert result.exit_code == 0, result.output
+    assert "thetoxicparty: 35 messages. Languages: tr 100%." in result.output
+    assert "5 messages were too short to tell." in result.output
+    assert "Main language: tr" in result.output
+
+
+def test_languages_with_only_short_messages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, chat_message: ChatMessage
+) -> None:
+    monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
+    ChannelLookup(httpx.AsyncClient(), tmp_path / "channels.json").remember(
+        ChannelIds(slug="quiet", channel_id=chat_message.channel_id, chatroom_id=1)
+    )
+    store = ChatStore(tmp_path / "chat.sqlite3")
+    store.save_message(chat_message.model_copy(update={"text": "gg"}))
+    store.close()
+
+    result = runner.invoke(app, ["languages", "quiet"])
+
+    assert result.exit_code == 0
+    assert "Not enough saved chat for quiet yet (1 messages)." in result.output

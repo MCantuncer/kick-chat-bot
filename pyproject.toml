@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
     "keyring>=25.7.0",
+    "lingua-language-detector>=2.2.0",
     "psutil>=7.2.2",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
@@ -68,7 +69,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D", "S101", "S105", "S106", "S311", "PLR2004", "TC"]
+"tests/**" = ["D", "S101", "S105", "S106", "S311", "PLR2004", "RUF001", "TC"]
 
 [tool.mypy]
 strict = true

@@ -56,3 +56,10 @@ async def test_stream_raises_on_error_frame() -> None:
     with pytest.raises(PusherProtocolError, match="4001"):
         _ = [item async for item in source.stream()]
     server.close()
+
+
+async def test_stream_names_the_address_it_could_not_reach() -> None:
+    source = PusherChatSource(1, 2, endpoint=at("ws://127.0.0.1:9/app/somekey"))
+
+    with pytest.raises(ConnectionError, match=r"could not connect to 127\.0\.0\.1/app/somekey"):
+        _ = [item async for item in source.stream()]

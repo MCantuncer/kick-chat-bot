@@ -84,6 +84,11 @@ class ChannelLookup:
         return ChannelIds(slug=slug, channel_id=int(payload["id"]), chatroom_id=int(chatroom["id"]))
 
     def _load(self) -> dict[str, ChannelIds]:
-        if not self._cache_file.exists():
-            return {}
-        return _CACHE.validate_json(self._cache_file.read_bytes())
+        return read_cache(self._cache_file)
+
+
+def read_cache(cache_file: Path) -> dict[str, ChannelIds]:
+    """Return the channels resolved so far, by name."""
+    if not cache_file.exists():
+        return {}
+    return _CACHE.validate_json(cache_file.read_bytes())
