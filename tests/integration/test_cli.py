@@ -238,8 +238,9 @@ def test_languages_reports_the_channel_mix(
     result = runner.invoke(app, ["languages", "@TheToxicParty"])
 
     assert result.exit_code == 0, result.output
-    assert "thetoxicparty: 35 messages. Languages: tr 100%." in result.output
-    assert "5 messages were too short to tell." in result.output
+    assert (
+        "thetoxicparty: 35 messages: 30 detected (tr 100%), 5 too short to tell." in result.output
+    )
     assert "Main language: tr" in result.output
 
 
