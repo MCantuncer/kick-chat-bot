@@ -54,6 +54,12 @@ make install
 uv run kick-commenter --help
 ```
 
+To start building up a picture of a channel's chat, run the read-only collector. It saves the chat on your computer and never posts anything:
+
+```bash
+uv run kick-commenter collect <channel>
+```
+
 ## Development
 
 ```bash

@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import httpx
@@ -5,9 +6,10 @@ import pytest
 import respx
 from typer.testing import CliRunner
 
-from kick_commenter import __version__
+from kick_commenter import __version__, cli
 from kick_commenter.cli import app
 from kick_commenter.kick.bots import BotAccount, BotRegistry
+from kick_commenter.models import ChatMessage
 
 from ..unit.kick.factories import NOW
 
@@ -120,3 +122,39 @@ def test_bots_remove_reports_unknown_bot() -> None:
 
     assert result.exit_code == 1
     assert "No bot named 'ghost'" in result.output
+
+
+@respx.mock
+def test_collect_explains_unknown_channel(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
+    respx.get("https://kick.com/api/v2/channels/ghost").mock(return_value=httpx.Response(404))
+
+    result = runner.invoke(app, ["collect", "ghost"])
+
+    assert result.exit_code == 1
+    assert "no channel named" in result.output
+
+
+def test_collect_saves_chat_until_stopped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, chat_message: ChatMessage
+) -> None:
+    monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
+
+    class OneMessageSource:
+        def __init__(self, chatroom_id: int, channel_id: int) -> None:
+            assert (chatroom_id, channel_id) == (1001, 2002)
+
+        async def stream(self) -> AsyncIterator[ChatMessage]:
+            yield chat_message
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "PusherChatSource", OneMessageSource)
+
+    result = runner.invoke(
+        app, ["collect", "TheToxicParty", "--chatroom-id", "1001", "--channel-id", "2002"]
+    )
+
+    assert result.exit_code == 0
+    assert "viewer: reis bugün başka" in result.output
+    assert "Saved 1 messages and 0 events" in result.output
+    assert "thetoxicparty" in (tmp_path / "channels.json").read_text()
