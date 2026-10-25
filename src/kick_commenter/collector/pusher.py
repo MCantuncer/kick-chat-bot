@@ -32,6 +32,21 @@ CHANNEL_EVENTS = {
 }
 
 Connector = Callable[[str], Any]
+
+OPEN_TIMEOUT_SECONDS = 20.0
+# Try IPv6 and IPv4 side by side instead of waiting for one to time out (RFC 8305).
+HAPPY_EYEBALLS_DELAY_SECONDS = 0.25
+
+
+def connect_quickly(url: str) -> Any:
+    """Open a websocket, racing the network routes to the server."""
+    return connect(
+        url,
+        open_timeout=OPEN_TIMEOUT_SECONDS,
+        happy_eyeballs_delay=HAPPY_EYEBALLS_DELAY_SECONDS,
+    )
+
+
 Endpoint = Callable[[], Awaitable[str]]
 
 
@@ -52,7 +67,7 @@ class PusherChatSource:
         channel_id: int,
         *,
         endpoint: Endpoint = _fallback_endpoint,
-        connector: Connector = connect,
+        connector: Connector = connect_quickly,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         """Read chatroom ``chatroom_id`` and events of channel ``channel_id``.

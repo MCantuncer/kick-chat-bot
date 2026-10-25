@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 from websockets.asyncio.server import ServerConnection, serve
 
+from kick_commenter.collector import pusher
 from kick_commenter.collector.pusher import PusherChatSource, PusherProtocolError
 from kick_commenter.models import ChannelEvent, ChannelEventKind, ChatMessage
 
@@ -63,3 +64,14 @@ async def test_stream_names_the_address_it_could_not_reach() -> None:
 
     with pytest.raises(ConnectionError, match=r"could not connect to 127\.0\.0\.1/app/somekey"):
         _ = [item async for item in source.stream()]
+
+
+def test_default_connection_races_network_routes(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(pusher, "connect", lambda url, **options: seen.update(url=url, **options))
+
+    pusher.connect_quickly("wss://example.test/app/key")
+
+    assert seen["url"] == "wss://example.test/app/key"
+    assert seen["happy_eyeballs_delay"] > 0
+    assert seen["open_timeout"] >= 10
