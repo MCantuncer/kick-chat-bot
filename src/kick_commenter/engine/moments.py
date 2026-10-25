@@ -46,7 +46,7 @@ EVENT_MOMENTS = {
 
 # Words and emotes viewers use when something goes wrong for the streamer.
 ROUGH_WORDS = frozenset(
-    {"olmadı", "yazık", "eyvah", "maalesef", "üzüldüm", "unlucky", "rip", "oof"}  # noqa: RUF001
+    {"olmadı", "yazık", "eyvah", "maalesef", "üzüldüm", "unlucky", "rip", "oof"}
 )
 SAD_EMOTES = frozenset({"Sadge", "PepeHands", "BibleThump", "NotLikeThis", "FeelsBadMan"})
 
