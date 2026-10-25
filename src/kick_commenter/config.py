@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     redirect_port: int = Field(default=8765, gt=0, lt=65536)
     login_timeout_seconds: float = Field(default=300, gt=0)
 
+    # Only needed if Kick rotates the public chat stream key and the lookup breaks.
+    pusher_app_key: str | None = None
+    pusher_cluster: str = "us2"
+
     @model_validator(mode="after")
     def _warning_before_timeout(self) -> Self:
         if self.idle_warning_minutes >= self.idle_timeout_minutes:

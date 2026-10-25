@@ -45,7 +45,7 @@ def add_bots(data_dir: Path, tokens: MemoryTokenStore, *names: str) -> list[BotA
 @pytest.fixture
 def chat(monkeypatch: pytest.MonkeyPatch, chat_message: ChatMessage) -> None:
     class OneMessageThenQuiet:
-        def __init__(self, chatroom_id: int, channel_id: int) -> None:
+        def __init__(self, chatroom_id: int, channel_id: int, **_: object) -> None:
             assert (chatroom_id, channel_id) == (1001, 2002)
 
         async def stream(self) -> AsyncIterator[ChatMessage]:
