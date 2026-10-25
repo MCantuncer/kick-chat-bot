@@ -1,0 +1,309 @@
+# serializer version: 1
+# name: test_sample_chat_profile_is_stable
+  dict({
+    'address_terms': list([
+      dict({
+        'count': 56,
+        'score': 1.0,
+        'term': 'reis',
+      }),
+      dict({
+        'count': 51,
+        'score': 1.0,
+        'term': 'kral',
+      }),
+      dict({
+        'count': 43,
+        'score': 1.0,
+        'term': 'abi',
+      }),
+    ]),
+    'built_at': '2026-10-25T23:00:00Z',
+    'channel': 'sample',
+    'languages': dict({
+      'de': 0.015,
+      'en': 0.051,
+      'tr': 0.934,
+    }),
+    'main_language': 'tr',
+    'messages': 240,
+    'phrases': list([
+      dict({
+        'count': 24,
+        'score': 1.0,
+        'term': 'kurması lazım',
+      }),
+      dict({
+        'count': 13,
+        'score': 1.0,
+        'term': 'lobi için',
+      }),
+      dict({
+        'count': 12,
+        'score': 1.0,
+        'term': 'bu oyun',
+      }),
+      dict({
+        'count': 11,
+        'score': 1.0,
+        'term': 'a play',
+      }),
+      dict({
+        'count': 11,
+        'score': 1.0,
+        'term': 'nemesis gelsin',
+      }),
+      dict({
+        'count': 11,
+        'score': 1.0,
+        'term': 'var mı',
+      }),
+      dict({
+        'count': 9,
+        'score': 1.0,
+        'term': 'klibi izle',
+      }),
+      dict({
+        'count': 9,
+        'score': 1.0,
+        'term': 'şu klibi',
+      }),
+      dict({
+        'count': 9,
+        'score': 1.0,
+        'term': 'şu klibi izle',
+      }),
+      dict({
+        'count': 4,
+        'score': 1.0,
+        'term': 'adam yaptı',
+      }),
+      dict({
+        'count': 3,
+        'score': 1.0,
+        'term': 'şans meselesi',
+      }),
+      dict({
+        'count': 23,
+        'score': 0.988,
+        'term': 'takım kurması',
+      }),
+      dict({
+        'count': 23,
+        'score': 0.988,
+        'term': 'takım kurması lazım',
+      }),
+      dict({
+        'count': 13,
+        'score': 0.981,
+        'term': 'helal olsun',
+      }),
+      dict({
+        'count': 10,
+        'score': 0.978,
+        'term': 'what a',
+      }),
+      dict({
+        'count': 10,
+        'score': 0.978,
+        'term': 'what a play',
+      }),
+      dict({
+        'count': 12,
+        'score': 0.973,
+        'term': 'bu oyun bitti',
+      }),
+      dict({
+        'count': 4,
+        'score': 0.957,
+        'term': 'efsane oynuyor',
+      }),
+      dict({
+        'count': 8,
+        'score': 0.95,
+        'term': 'sakin ol',
+      }),
+      dict({
+        'count': 12,
+        'score': 0.945,
+        'term': 'oyun bitti',
+      }),
+      dict({
+        'count': 11,
+        'score': 0.942,
+        'term': 'çok iyi',
+      }),
+      dict({
+        'count': 11,
+        'score': 0.922,
+        'term': 'yayın var mı',
+      }),
+      dict({
+        'count': 10,
+        'score': 0.902,
+        'term': 'yarın yayın var',
+      }),
+      dict({
+        'count': 7,
+        'score': 0.902,
+        'term': 'aynen öyle',
+      }),
+      dict({
+        'count': 7,
+        'score': 0.902,
+        'term': 'iyi oynadın',
+      }),
+      dict({
+        'count': 4,
+        'score': 0.902,
+        'term': 'adam yaptı yine',
+      }),
+      dict({
+        'count': 12,
+        'score': 0.9,
+        'term': 'lobi için takım',
+      }),
+      dict({
+        'count': 4,
+        'score': 0.879,
+        'term': 'olum ne oldu',
+      }),
+      dict({
+        'count': 7,
+        'score': 0.876,
+        'term': 'çok iyi oynadın',
+      }),
+      dict({
+        'count': 13,
+        'score': 0.857,
+        'term': 'bugün başka',
+      }),
+    ]),
+    'style': dict({
+      'caps_share': 0.017,
+      'emoji_share': 0.0,
+      'emote_only_share': 0.083,
+      'emote_share': 0.108,
+      'exclamation_share': 0.029,
+      'long_message_words': 5.0,
+      'median_words': 3.0,
+      'mention_share': 0.062,
+      'messages': 240,
+      'question_share': 0.087,
+      'reply_share': 0.0,
+      'stretched_share': 0.083,
+      'top_emotes': list([
+        list([
+          'KEKW',
+          28,
+        ]),
+        list([
+          'LUL',
+          9,
+        ]),
+      ]),
+    }),
+    'words': list([
+      dict({
+        'count': 56,
+        'score': 11.633,
+        'term': 'reis',
+      }),
+      dict({
+        'count': 11,
+        'score': 10.631,
+        'term': 'nemesis',
+      }),
+      dict({
+        'count': 24,
+        'score': 10.046,
+        'term': 'kurması',
+      }),
+      dict({
+        'count': 8,
+        'score': 8.258,
+        'term': 'efsanesin',
+      }),
+      dict({
+        'count': 6,
+        'score': 6.538,
+        'term': 'kekw',
+      }),
+      dict({
+        'count': 13,
+        'score': 6.142,
+        'term': 'lobi',
+      }),
+      dict({
+        'count': 8,
+        'score': 5.915,
+        'term': 'gg',
+      }),
+      dict({
+        'count': 43,
+        'score': 5.712,
+        'term': 'abi',
+      }),
+      dict({
+        'count': 51,
+        'score': 4.825,
+        'term': 'kral',
+      }),
+      dict({
+        'count': 4,
+        'score': 4.66,
+        'term': 'aabi',
+      }),
+      dict({
+        'count': 4,
+        'score': 4.66,
+        'term': 'ahahah',
+      }),
+      dict({
+        'count': 7,
+        'score': 4.595,
+        'term': 'oynadın',
+      }),
+      dict({
+        'count': 3,
+        'score': 3.639,
+        'term': 'kaatılıyorum',
+      }),
+      dict({
+        'count': 3,
+        'score': 3.639,
+        'term': 'kraal',
+      }),
+      dict({
+        'count': 13,
+        'score': 2.938,
+        'term': 'helal',
+      }),
+      dict({
+        'count': 4,
+        'score': 2.887,
+        'term': 'olum',
+      }),
+      dict({
+        'count': 10,
+        'score': 2.655,
+        'term': 'what',
+      }),
+      dict({
+        'count': 9,
+        'score': 2.614,
+        'term': 'kaçta',
+      }),
+      dict({
+        'count': 9,
+        'score': 2.614,
+        'term': 'klibi',
+      }),
+      dict({
+        'count': 16,
+        'score': 2.604,
+        'term': 'yaptın',
+      }),
+    ]),
+  })
+# ---

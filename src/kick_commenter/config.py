@@ -62,3 +62,8 @@ class Settings(BaseSettings):
     def locks_dir(self) -> Path:
         """Where running sessions mark the channels they hold."""
         return self.data_dir / "locks"
+
+    @property
+    def profiles_dir(self) -> Path:
+        """Where community profiles are saved, one file per channel."""
+        return self.data_dir / "profiles"

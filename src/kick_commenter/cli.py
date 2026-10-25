@@ -32,6 +32,8 @@ from kick_commenter.kick.tokens import AppTokenProvider
 from kick_commenter.models import ChatMessage
 from kick_commenter.nlp.language import LinguaGuesser
 from kick_commenter.nlp.pipeline import TextPipeline
+from kick_commenter.profile.builder import ProfileBuilder
+from kick_commenter.profile.terms import ScoredTerm
 from kick_commenter.session.commands import HELP_TEXT
 from kick_commenter.session.idle import IdleTimer, minutes
 from kick_commenter.session.lock import ChannelBusyError, ChannelLock, LockInfo
@@ -118,18 +120,7 @@ def collect(
 @app.command()
 def languages(slug: str) -> None:
     """Show which languages a channel's saved chat is in."""
-    config = Settings()
-    ids = read_cache(config.channels_file).get(slug.removeprefix("@").lower())
-    if ids is None:
-        typer.echo(f"No saved chat for {slug}. Collect some first: kick-commenter collect {slug}")
-        raise typer.Exit(1)
-    store = ChatStore(config.chat_db)
-    pipeline = TextPipeline(LinguaGuesser())
-    try:
-        for message in store.messages(ids.channel_id):
-            pipeline.process(message)
-    finally:
-        store.close()
+    ids, pipeline, _ = _read_saved_chat(Settings(), slug)
     mix = pipeline.mix
     if mix.total == 0:
         typer.echo(f"Not enough saved chat for {ids.slug} yet ({mix.unknown} messages).")
@@ -139,6 +130,34 @@ def languages(slug: str) -> None:
     typer.echo(f"{mix.unknown} messages were too short to tell.")
     main = mix.dominant()
     typer.echo(f"Main language: {main}" if main else "No main language yet.")
+
+
+@app.command()
+def profile(slug: str) -> None:
+    """Learn how a channel's chat talks from its saved chat, and show it."""
+    config = Settings()
+    ids, _, builder = _read_saved_chat(config, slug)
+    learned = builder.build(utc_now())
+    path = config.profiles_dir / f"{ids.slug}.json"
+    learned.save(path)
+    style = learned.style
+
+    def terms(items: list[ScoredTerm], limit: int = 15) -> str:
+        return ", ".join(t.term for t in items[:limit]) or "(not enough chat yet)"
+
+    typer.echo(f"{ids.slug}: learned from {learned.messages} messages.")
+    typer.echo(f"Main language: {learned.main_language or 'not clear yet'}")
+    typer.echo(f"Their words: {terms(learned.words)}")
+    typer.echo(f"Their phrases: {terms(learned.phrases, 10)}")
+    typer.echo(f"How they address people: {terms(learned.address_terms, 8)}")
+    emotes = ", ".join(name for name, _ in style.top_emotes[:10]) or "(none yet)"
+    typer.echo(f"Favorite emotes: {emotes}")
+    typer.echo(
+        f"Style: about {style.median_words:g} words per message, "
+        f"{style.caps_share:.0%} in caps, {style.emote_share:.0%} with emotes, "
+        f"{style.emoji_share:.0%} with emoji, {style.question_share:.0%} questions."
+    )
+    typer.echo(f"Saved to {path}")
 
 
 @app.command()
@@ -256,6 +275,24 @@ def bots_remove(name: str) -> None:
         typer.echo(f"Removed bot {bot.name}.")
 
     _run_with_kick(run)
+
+
+def _read_saved_chat(
+    config: Settings, slug: str
+) -> tuple[ChannelIds, TextPipeline, ProfileBuilder]:
+    ids = read_cache(config.channels_file).get(slug.removeprefix("@").lower())
+    if ids is None:
+        typer.echo(f"No saved chat for {slug}. Collect some first: kick-commenter collect {slug}")
+        raise typer.Exit(1)
+    pipeline = TextPipeline(LinguaGuesser())
+    builder = ProfileBuilder(ids.slug, pipeline.mix)
+    store = ChatStore(config.chat_db)
+    try:
+        for message in store.messages(ids.channel_id):
+            builder.add(pipeline.process(message))
+    finally:
+        store.close()
+    return ids, pipeline, builder
 
 
 def _pick_bot(config: Settings, name: str | None) -> BotAccount:
