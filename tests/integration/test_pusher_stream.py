@@ -1,4 +1,5 @@
 import json
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import pytest
@@ -6,6 +7,13 @@ from websockets.asyncio.server import ServerConnection, serve
 
 from kick_commenter.collector.pusher import PusherChatSource, PusherProtocolError
 from kick_commenter.models import ChannelEvent, ChannelEventKind, ChatMessage
+
+
+def at(url: str) -> Callable[[], Awaitable[str]]:
+    async def endpoint() -> str:
+        return url
+
+    return endpoint
 
 
 async def run_server(frames: list[dict[str, Any]], received: list[dict[str, Any]]) -> Any:
@@ -26,7 +34,7 @@ async def test_stream_subscribes_answers_pings_and_yields_items(
     received: list[dict[str, Any]] = []
     server = await run_server(pusher_frames, received)
     port = next(iter(server.sockets)).getsockname()[1]
-    source = PusherChatSource(1001, 2002, url=f"ws://127.0.0.1:{port}")
+    source = PusherChatSource(1001, 2002, endpoint=at(f"ws://127.0.0.1:{port}"))
 
     items = [item async for item in source.stream()]
     server.close()
@@ -43,7 +51,7 @@ async def test_stream_raises_on_error_frame() -> None:
     received: list[dict[str, Any]] = []
     server = await run_server([{"event": "pusher:error", "data": {"code": 4001}}], received)
     port = next(iter(server.sockets)).getsockname()[1]
-    source = PusherChatSource(1, 2, url=f"ws://127.0.0.1:{port}")
+    source = PusherChatSource(1, 2, endpoint=at(f"ws://127.0.0.1:{port}"))
 
     with pytest.raises(PusherProtocolError, match="4001"):
         _ = [item async for item in source.stream()]

@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 
 import httpx
@@ -141,7 +141,7 @@ def test_collect_saves_chat_until_stopped(
     monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
 
     class OneMessageSource:
-        def __init__(self, chatroom_id: int, channel_id: int) -> None:
+        def __init__(self, chatroom_id: int, channel_id: int, **_: object) -> None:
             assert (chatroom_id, channel_id) == (1001, 2002)
 
         async def stream(self) -> AsyncIterator[ChatMessage]:
@@ -158,3 +158,53 @@ def test_collect_saves_chat_until_stopped(
     assert "viewer: reis bugün başka" in result.output
     assert "Saved 1 messages and 0 events" in result.output
     assert "thetoxicparty" in (tmp_path / "channels.json").read_text()
+
+
+@pytest.mark.parametrize(
+    ("env_key", "expected_url"),
+    [
+        (None, "wss://ws-eu.pusher.com/app/fromkick?"),
+        ("override", "wss://ws-us2.pusher.com/app/override?"),
+    ],
+)
+@respx.mock
+def test_collect_connects_to_the_current_stream_app(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, env_key: str | None, expected_url: str
+) -> None:
+    monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
+    if env_key:
+        monkeypatch.setenv("KICK_COMMENTER_PUSHER_APP_KEY", env_key)
+    respx.post("https://web.kick.com/api/v1/realtime/channels/2002/chat/connection").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "connections": [
+                        {
+                            "provider": "pusher",
+                            "credentials": {"app_key": "fromkick", "cluster": "eu"},
+                        }
+                    ]
+                }
+            },
+        )
+    )
+    urls: list[str] = []
+
+    class RecordingSource:
+        def __init__(self, *_: int, endpoint: Callable[[], Awaitable[str]]) -> None:
+            self._endpoint = endpoint
+
+        async def stream(self) -> AsyncIterator[ChatMessage]:
+            urls.append(await self._endpoint())
+            raise KeyboardInterrupt
+            yield  # pragma: no cover - makes this an async generator
+
+    monkeypatch.setattr(cli, "PusherChatSource", RecordingSource)
+
+    result = runner.invoke(
+        app, ["collect", "thetoxicparty", "--chatroom-id", "1", "--channel-id", "2002"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert urls[0].startswith(expected_url)

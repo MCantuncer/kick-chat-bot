@@ -14,6 +14,7 @@ from kick_commenter import __version__
 from kick_commenter.collector.collector import Collector, CollectorStats
 from kick_commenter.collector.lookup import ChannelIds, ChannelLookup, ChannelLookupError
 from kick_commenter.collector.pusher import PusherChatSource
+from kick_commenter.collector.realtime import PusherApp, RealtimeConfig
 from kick_commenter.config import Settings
 from kick_commenter.kick.bots import BotAccount, BotRegistry
 from kick_commenter.kick.callback import wait_for_code
@@ -88,10 +89,11 @@ def collect(
 
     async def main() -> None:
         nonlocal collector
-        ids = await _resolve_channel(config, slug, chatroom_id, channel_id)
-        typer.echo(f"Collecting {ids.slug} (read-only). Press Ctrl+C to stop.")
-        collector = _collector(ids, store, quiet=quiet)
-        await collector.run(asyncio.Event())
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as http:
+            ids = await _resolve_channel(config, http, slug, chatroom_id, channel_id)
+            typer.echo(f"Collecting {ids.slug} (read-only). Press Ctrl+C to stop.")
+            collector = _collector(config, http, ids, store, quiet=quiet)
+            await collector.run(asyncio.Event())
 
     try:
         asyncio.run(main())
@@ -130,21 +132,23 @@ def start(  # noqa: PLR0913, PLR0917 - one parameter per CLI option
 
     async def main(channel: str) -> StopReason:
         nonlocal collector
-        ids = await _resolve_channel(config, channel, chatroom_id, channel_id)
-        collector = _collector(ids, store, quiet=quiet)
-        stats = collector.stats
-        session = Session(
-            collector.run,
-            IdleTimer(timeout=timeout, warning=warning, last_input=utc_now()),
-            clock=utc_now,
-            say=typer.echo,
-            status=lambda: f"Listening in {ids.slug} as {account.name}. {_summary(stats)}",
-        )
-        typer.echo(
-            f"Session started in {ids.slug} as {account.name}. Dry run: nothing is posted yet.\n"
-            f"It stops after {minutes(timeout)} min without input. {HELP_TEXT}"
-        )
-        return await session.run(typed_lines())
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as http:
+            ids = await _resolve_channel(config, http, channel, chatroom_id, channel_id)
+            collector = _collector(config, http, ids, store, quiet=quiet)
+            stats = collector.stats
+            session = Session(
+                collector.run,
+                IdleTimer(timeout=timeout, warning=warning, last_input=utc_now()),
+                clock=utc_now,
+                say=typer.echo,
+                status=lambda: f"Listening in {ids.slug} as {account.name}. {_summary(stats)}",
+            )
+            typer.echo(
+                f"Session started in {ids.slug} as {account.name}. "
+                "Dry run: nothing is posted yet.\n"
+                f"It stops after {minutes(timeout)} min without input. {HELP_TEXT}"
+            )
+            return await session.run(typed_lines())
 
     channel = slug.removeprefix("@").lower()
     lock = ChannelLock(
@@ -241,25 +245,35 @@ def _pick_bot(config: Settings, name: str | None) -> BotAccount:
 
 
 async def _resolve_channel(
-    config: Settings, slug: str, chatroom_id: int | None, channel_id: int | None
+    config: Settings,
+    http: httpx.AsyncClient,
+    slug: str,
+    chatroom_id: int | None,
+    channel_id: int | None,
 ) -> ChannelIds:
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as http:
-        lookup = ChannelLookup(http, config.channels_file)
-        if chatroom_id is None or channel_id is None:
-            return await lookup.resolve(slug)
-        ids = ChannelIds(
-            slug=slug.removeprefix("@").lower(), channel_id=channel_id, chatroom_id=chatroom_id
-        )
-        lookup.remember(ids)
-        return ids
+    lookup = ChannelLookup(http, config.channels_file)
+    if chatroom_id is None or channel_id is None:
+        return await lookup.resolve(slug)
+    ids = ChannelIds(
+        slug=slug.removeprefix("@").lower(), channel_id=channel_id, chatroom_id=chatroom_id
+    )
+    lookup.remember(ids)
+    return ids
 
 
-def _collector(ids: ChannelIds, store: ChatStore, *, quiet: bool) -> Collector:
+def _collector(
+    config: Settings, http: httpx.AsyncClient, ids: ChannelIds, store: ChatStore, *, quiet: bool
+) -> Collector:
     def show(message: ChatMessage) -> None:
         typer.echo(f"{message.sender.username}: {message.text}")
 
+    async def endpoint() -> str:
+        if config.pusher_app_key:
+            return PusherApp(app_key=config.pusher_app_key, cluster=config.pusher_cluster).url
+        return (await RealtimeConfig(http).pusher_app(ids.channel_id)).url
+
     return Collector(
-        PusherChatSource(ids.chatroom_id, ids.channel_id),
+        PusherChatSource(ids.chatroom_id, ids.channel_id, endpoint=endpoint),
         store,
         on_message=None if quiet else show,
     )

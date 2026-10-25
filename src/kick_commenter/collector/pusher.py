@@ -6,21 +6,18 @@ login. If Kick changes it, only this adapter needs updating.
 
 import json
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
 from websockets.asyncio.client import ClientConnection, connect
 
+from kick_commenter.collector.realtime import FALLBACK_APP
 from kick_commenter.collector.source import ChatItem
 from kick_commenter.models import ChannelEvent, ChannelEventKind, ChatMessage, Sender
 
 logger = logging.getLogger(__name__)
 
-PUSHER_URL = (
-    "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679"
-    "?protocol=7&client=js&version=8.4.0&flash=false"
-)
 CHAT_MESSAGE_EVENT = "App\\Events\\ChatMessageEvent"
 
 # Channel event names as the website receives them. Unknown names are ignored.
@@ -33,6 +30,11 @@ CHANNEL_EVENTS = {
 }
 
 Connector = Callable[[str], Any]
+Endpoint = Callable[[], Awaitable[str]]
+
+
+async def _fallback_endpoint() -> str:
+    return FALLBACK_APP.url
 
 
 class PusherProtocolError(Exception):
@@ -47,20 +49,24 @@ class PusherChatSource:
         chatroom_id: int,
         channel_id: int,
         *,
-        url: str = PUSHER_URL,
+        endpoint: Endpoint = _fallback_endpoint,
         connector: Connector = connect,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
-        """Read chatroom ``chatroom_id`` and events of channel ``channel_id``."""
+        """Read chatroom ``chatroom_id`` and events of channel ``channel_id``.
+
+        ``endpoint`` is asked for the websocket address before every connection,
+        so a rotated app key is picked up on the next reconnect.
+        """
         self._chatroom_id = chatroom_id
         self._channel_id = channel_id
-        self._url = url
+        self._endpoint = endpoint
         self._connector = connector
         self._clock = clock
 
     async def stream(self) -> AsyncIterator[ChatItem]:
         """Connect, subscribe and yield items until the connection closes."""
-        async with self._connector(self._url) as ws:
+        async with self._connector(await self._endpoint()) as ws:
             await self._subscribe(ws, f"chatrooms.{self._chatroom_id}.v2")
             await self._subscribe(ws, f"channel.{self._channel_id}")
             async for raw in ws:
