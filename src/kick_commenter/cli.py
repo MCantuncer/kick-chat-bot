@@ -12,7 +12,12 @@ import typer
 
 from kick_commenter import __version__
 from kick_commenter.collector.collector import Collector, CollectorStats
-from kick_commenter.collector.lookup import ChannelIds, ChannelLookup, ChannelLookupError
+from kick_commenter.collector.lookup import (
+    ChannelIds,
+    ChannelLookup,
+    ChannelLookupError,
+    read_cache,
+)
 from kick_commenter.collector.pusher import PusherChatSource
 from kick_commenter.collector.realtime import PusherApp, RealtimeConfig
 from kick_commenter.config import Settings
@@ -25,6 +30,8 @@ from kick_commenter.kick.oauth import OAuthClient, utc_now
 from kick_commenter.kick.token_store import KeyringTokenStore
 from kick_commenter.kick.tokens import AppTokenProvider
 from kick_commenter.models import ChatMessage
+from kick_commenter.nlp.language import LinguaGuesser
+from kick_commenter.nlp.pipeline import TextPipeline
 from kick_commenter.session.commands import HELP_TEXT
 from kick_commenter.session.idle import IdleTimer, minutes
 from kick_commenter.session.lock import ChannelBusyError, ChannelLock, LockInfo
@@ -106,6 +113,32 @@ def collect(
         store.close()
     if collector is not None:
         typer.echo(f"Stopped. {_summary(collector.stats)}")
+
+
+@app.command()
+def languages(slug: str) -> None:
+    """Show which languages a channel's saved chat is in."""
+    config = Settings()
+    ids = read_cache(config.channels_file).get(slug.removeprefix("@").lower())
+    if ids is None:
+        typer.echo(f"No saved chat for {slug}. Collect some first: kick-commenter collect {slug}")
+        raise typer.Exit(1)
+    store = ChatStore(config.chat_db)
+    pipeline = TextPipeline(LinguaGuesser())
+    try:
+        for message in store.messages(ids.channel_id):
+            pipeline.process(message)
+    finally:
+        store.close()
+    mix = pipeline.mix
+    if mix.total == 0:
+        typer.echo(f"Not enough saved chat for {ids.slug} yet ({mix.unknown} messages).")
+        return
+    shares = ", ".join(f"{lang} {share:.0%}" for lang, share in mix.shares().items())
+    typer.echo(f"{ids.slug}: {mix.total + mix.unknown} messages. Languages: {shares}.")
+    typer.echo(f"{mix.unknown} messages were too short to tell.")
+    main = mix.dominant()
+    typer.echo(f"Main language: {main}" if main else "No main language yet.")
 
 
 @app.command()

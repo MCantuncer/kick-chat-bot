@@ -60,6 +60,12 @@ To start building up a picture of a channel's chat, run the read-only collector.
 uv run kick-commenter collect <channel>
 ```
 
+Run it as often as you like; every run adds to the same local history. To see which languages the saved chat is in:
+
+```bash
+uv run kick-commenter languages <channel>
+```
+
 To run a session with one of your bots, add the bot once and then start it in a channel:
 
 ```bash

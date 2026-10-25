@@ -9,8 +9,10 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from websockets.asyncio.client import ClientConnection, connect
+from websockets.exceptions import InvalidHandshake
 
 from kick_commenter.collector.realtime import FALLBACK_APP
 from kick_commenter.collector.source import ChatItem
@@ -66,7 +68,14 @@ class PusherChatSource:
 
     async def stream(self) -> AsyncIterator[ChatItem]:
         """Connect, subscribe and yield items until the connection closes."""
-        async with self._connector(await self._endpoint()) as ws:
+        url = await self._endpoint()
+        try:
+            ws = await self._connector(url)
+        except (OSError, InvalidHandshake) as error:
+            address = urlsplit(url)
+            msg = f"could not connect to {address.hostname}{address.path}: {error}"
+            raise ConnectionError(msg) from error
+        async with ws:
             await self._subscribe(ws, f"chatrooms.{self._chatroom_id}.v2")
             await self._subscribe(ws, f"channel.{self._channel_id}")
             async for raw in ws:

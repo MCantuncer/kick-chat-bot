@@ -1,9 +1,11 @@
 """Local SQLite storage for collected chat messages and channel events."""
 
 import sqlite3
+from collections.abc import Iterator
+from datetime import datetime
 from pathlib import Path
 
-from kick_commenter.models import ChannelEvent, ChatMessage
+from kick_commenter.models import ChannelEvent, ChatMessage, Sender
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS messages (
@@ -73,6 +75,23 @@ class ChatStore:
             "SELECT COUNT(*) FROM events WHERE channel_id = ?", (channel_id,)
         ).fetchone()
         return int(row[0])
+
+    def messages(self, channel_id: int) -> Iterator[ChatMessage]:
+        """Yield a channel's stored messages, oldest first."""
+        rows = self._db.execute(
+            "SELECT message_id, sender_id, username, text, sent_at, replies_to "
+            "FROM messages WHERE channel_id = ? ORDER BY sent_at, rowid",
+            (channel_id,),
+        )
+        for message_id, sender_id, username, text, sent_at, replies_to in rows:
+            yield ChatMessage(
+                message_id=message_id,
+                channel_id=channel_id,
+                sender=Sender(user_id=sender_id, username=username),
+                text=text,
+                sent_at=datetime.fromisoformat(sent_at),
+                replies_to=replies_to,
+            )
 
     def close(self) -> None:
         """Close the database."""
