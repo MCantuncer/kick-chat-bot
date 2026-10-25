@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,3 +20,18 @@ class Settings(BaseSettings):
     idle_timeout_minutes: int = Field(default=120, gt=0)
     idle_warning_minutes: int = Field(default=5, gt=0)
     dry_run: bool = True
+
+    client_id: str | None = None
+    client_secret: SecretStr | None = None
+    redirect_port: int = Field(default=8765, gt=0, lt=65536)
+    login_timeout_seconds: float = Field(default=300, gt=0)
+
+    @property
+    def redirect_uri(self) -> str:
+        """The callback URL registered in the Kick developer app."""
+        return f"http://localhost:{self.redirect_port}/callback"
+
+    @property
+    def bots_file(self) -> Path:
+        """Where the bot list is saved."""
+        return self.data_dir / "bots.json"
