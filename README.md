@@ -17,7 +17,7 @@
 
 ## What it does
 
-Every stream has its own culture: its nicknames, inside jokes, emotes and way of cheering. kick-chat-bot joins a channel's chat, listens first, and learns that culture. Once it understands how the community talks, it adds short, positive messages that fit in naturally, celebrating big moments and encouraging the streamer without spamming.
+Every stream has its own culture: its nicknames, inside jokes, emotes and way of cheering. kick-chat-bot joins a channel's chat, listens first, and learns that culture. Once it gets the vibe, it joins in the way a regular would: reacting to the big plays, backing the streamer on a rough run, and using the chat's own words. It speaks rarely and never floods the chat.
 
 ## Highlights
 
@@ -36,7 +36,7 @@ flowchart LR
     A[Listen to chat] --> B[Learn the community's style]
     B --> C{Worth reacting?}
     C -- no --> A
-    C -- yes --> D[Pick a fitting, positive message]
+    C -- yes --> D[Pick something that fits the moment]
     D --> E[Post it, politely paced]
     E --> A
 ```
