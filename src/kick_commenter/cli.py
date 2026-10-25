@@ -34,6 +34,7 @@ from kick_commenter.nlp.language import LinguaGuesser
 from kick_commenter.nlp.pipeline import TextPipeline
 from kick_commenter.profile.builder import ProfileBuilder
 from kick_commenter.profile.terms import ScoredTerm
+from kick_commenter.profile.warmup import WarmupTracker
 from kick_commenter.session.commands import HELP_TEXT
 from kick_commenter.session.idle import IdleTimer, minutes
 from kick_commenter.session.lock import ChannelBusyError, ChannelLock, LockInfo
@@ -220,6 +221,35 @@ def start(  # noqa: PLR0913, PLR0917 - one parameter per CLI option
         store.close()
     if collector is not None:
         typer.echo(f"Session ended. {_summary(collector.stats)}")
+
+
+@app.command()
+def warmup(slug: str) -> None:
+    """Show whether the bot has listened to a channel long enough to join in."""
+    config = Settings()
+    ids = read_cache(config.channels_file).get(slug.removeprefix("@").lower())
+    if ids is None:
+        typer.echo(f"No saved chat for {slug}. Collect some first: kick-commenter collect {slug}")
+        raise typer.Exit(1)
+    pipeline = TextPipeline(LinguaGuesser())
+    tracker = WarmupTracker()
+    store = ChatStore(config.chat_db)
+    try:
+        for message in store.messages(ids.channel_id):
+            tracker.observe(pipeline.process(message))
+    finally:
+        store.close()
+    status, policy = tracker.status(), tracker.policy
+    listened = int(status.listening_seconds // 60)
+    typer.echo(
+        f"{ids.slug}: {status.messages}/{policy.min_messages} messages, "
+        f"{listened}/{int(policy.min_listening.total_seconds() // 60)} min listened, "
+        f"{status.stable_windows}/{policy.stable_windows} calm stretches in a row."
+    )
+    if status.converged:
+        typer.echo("Warm-up done: the profile has settled, so the bot is ready to join in.")
+    else:
+        typer.echo("Still warming up. Keep collecting during streams; progress adds up.")
 
 
 @bots_app.command("add")
