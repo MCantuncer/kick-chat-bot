@@ -127,8 +127,10 @@ def languages(slug: str) -> None:
         typer.echo(f"Not enough saved chat for {ids.slug} yet ({mix.unknown} messages).")
         return
     shares = ", ".join(f"{lang} {share:.0%}" for lang, share in mix.shares().items())
-    typer.echo(f"{ids.slug}: {mix.total + mix.unknown} messages. Languages: {shares}.")
-    typer.echo(f"{mix.unknown} messages were too short to tell.")
+    typer.echo(
+        f"{ids.slug}: {mix.total + mix.unknown} messages: {mix.total} detected ({shares}), "
+        f"{mix.unknown} too short to tell."
+    )
     main = mix.dominant()
     typer.echo(f"Main language: {main}" if main else "No main language yet.")
 
