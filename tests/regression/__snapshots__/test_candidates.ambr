@@ -1,0 +1,121 @@
+# serializer version: 1
+# name: test_sample_chat_candidates_are_stable
+  dict({
+    'hype': list([
+      tuple(
+        'kral helal olsun',
+        'history',
+      ),
+      tuple(
+        'helal olsun kral',
+        'history',
+      ),
+      tuple(
+        'aynen öyle reis',
+        'template',
+      ),
+      tuple(
+        'aynen öyle kral',
+        'template',
+      ),
+      tuple(
+        'what a play KEKW',
+        'template',
+      ),
+      tuple(
+        'olum ne oldu KEKW',
+        'template',
+      ),
+      tuple(
+        'efsane LUL',
+        'template',
+      ),
+    ]),
+    'raid': list([
+      tuple(
+        'hoş geldiniz',
+        'template',
+      ),
+      tuple(
+        'hoş geldiniz abi',
+        'template',
+      ),
+    ]),
+    'rough': list([
+      tuple(
+        'olur böyle abi',
+        'template',
+      ),
+      tuple(
+        'boşver sonraki',
+        'template',
+      ),
+      tuple(
+        'olur böyle',
+        'template',
+      ),
+      tuple(
+        'boşver sonraki reis',
+        'template',
+      ),
+      tuple(
+        'boşver sonraki abi',
+        'template',
+      ),
+    ]),
+    'stream_end': list([
+      tuple(
+        'eline sağlık',
+        'template',
+      ),
+      tuple(
+        'eline sağlık kral',
+        'template',
+      ),
+      tuple(
+        'iyi geceler',
+        'template',
+      ),
+      tuple(
+        'iyi geceler kral',
+        'template',
+      ),
+    ]),
+    'stream_start': list([
+      tuple(
+        'selam reis',
+        'template',
+      ),
+      tuple(
+        'hayırlı yayınlar kral',
+        'template',
+      ),
+      tuple(
+        'selam kral',
+        'template',
+      ),
+      tuple(
+        'selam',
+        'template',
+      ),
+      tuple(
+        'hayırlı yayınlar',
+        'template',
+      ),
+    ]),
+    'support': list([
+      tuple(
+        'eyvallah abi',
+        'template',
+      ),
+      tuple(
+        'helal olsun',
+        'template',
+      ),
+      tuple(
+        'eyvallah',
+        'template',
+      ),
+    ]),
+  })
+# ---
