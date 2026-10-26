@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 
-from kick_commenter.models import ChannelEvent, ChatMessage, Sender
+from kick_commenter.models import ChannelEvent, ChannelEventKind, ChatMessage, Sender
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS messages (
@@ -91,6 +91,19 @@ class ChatStore:
                 text=text,
                 sent_at=datetime.fromisoformat(sent_at),
                 replies_to=replies_to,
+            )
+
+    def events(self, channel_id: int) -> Iterator[ChannelEvent]:
+        """Yield a channel's stored events, oldest first."""
+        rows = self._db.execute(
+            "SELECT kind, occurred_at FROM events WHERE channel_id = ? ORDER BY occurred_at, id",
+            (channel_id,),
+        )
+        for kind, occurred_at in rows:
+            yield ChannelEvent(
+                channel_id=channel_id,
+                kind=ChannelEventKind(kind),
+                occurred_at=datetime.fromisoformat(occurred_at),
             )
 
     def close(self) -> None:

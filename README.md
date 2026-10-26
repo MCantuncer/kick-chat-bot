@@ -72,6 +72,12 @@ To see what it has learned about how the chat talks (its words, phrases, nicknam
 uv run kick-commenter profile <channel>
 ```
 
+To see what the bot would have said, replay the saved chat. It shows each moment worth reacting to and the message it would pick, and posts nothing:
+
+```bash
+uv run kick-commenter suggest <channel>
+```
+
 To run a session with one of your bots, add the bot once and then start it in a channel:
 
 ```bash
