@@ -4,6 +4,7 @@ import asyncio
 import os
 import webbrowser
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Annotated
 
@@ -21,6 +22,7 @@ from kick_commenter.collector.lookup import (
 from kick_commenter.collector.pusher import PusherChatSource
 from kick_commenter.collector.realtime import PusherApp, RealtimeConfig
 from kick_commenter.config import Settings
+from kick_commenter.engine.rehearsal import Rehearsal, Suggestion
 from kick_commenter.kick.bots import BotAccount, BotRegistry
 from kick_commenter.kick.callback import wait_for_code
 from kick_commenter.kick.client import KickApi
@@ -29,9 +31,9 @@ from kick_commenter.kick.login import add_bot, remove_bot
 from kick_commenter.kick.oauth import OAuthClient, utc_now
 from kick_commenter.kick.token_store import KeyringTokenStore
 from kick_commenter.kick.tokens import AppTokenProvider
-from kick_commenter.models import ChatMessage
+from kick_commenter.models import ChannelEvent, ChatMessage
 from kick_commenter.nlp.language import LinguaGuesser
-from kick_commenter.nlp.pipeline import TextPipeline
+from kick_commenter.nlp.pipeline import ProcessedMessage, TextPipeline
 from kick_commenter.profile.builder import ProfileBuilder
 from kick_commenter.profile.terms import ScoredTerm
 from kick_commenter.profile.warmup import WarmupTracker
@@ -121,8 +123,8 @@ def collect(
 @app.command()
 def languages(slug: str) -> None:
     """Show which languages a channel's saved chat is in."""
-    ids, pipeline, _ = _read_saved_chat(Settings(), slug)
-    mix = pipeline.mix
+    saved = _read_saved_chat(Settings(), slug)
+    ids, mix = saved.ids, saved.pipeline.mix
     if mix.total == 0:
         typer.echo(f"Not enough saved chat for {ids.slug} yet ({mix.unknown} messages).")
         return
@@ -139,8 +141,8 @@ def languages(slug: str) -> None:
 def profile(slug: str) -> None:
     """Learn how a channel's chat talks from its saved chat, and show it."""
     config = Settings()
-    ids, _, builder = _read_saved_chat(config, slug)
-    learned = builder.build(utc_now())
+    saved = _read_saved_chat(config, slug)
+    ids, learned = saved.ids, saved.builder.build(utc_now())
     path = config.profiles_dir / f"{ids.slug}.json"
     learned.save(path)
     style = learned.style
@@ -223,6 +225,55 @@ def start(  # noqa: PLR0913, PLR0917 - one parameter per CLI option
         store.close()
     if collector is not None:
         typer.echo(f"Session ended. {_summary(collector.stats)}")
+
+
+@app.command()
+def suggest(
+    slug: str,
+    bot: Annotated[
+        str | None, typer.Option(help="The bot's Kick name, so questions to it are noticed.")
+    ] = None,
+    limit: Annotated[int, typer.Option(min=1, help="Show at most this many moments.")] = 30,
+) -> None:
+    """Replay saved chat and show what the bot would have said. Nothing is posted."""
+    config = Settings()
+    saved = _read_saved_chat(config, slug)
+    if not saved.messages:
+        typer.echo(f"No saved chat for {saved.ids.slug} yet.")
+        return
+    rehearsal = Rehearsal(
+        profile=saved.builder.build(utc_now()),
+        history=saved.messages,
+        bot_username=_bot_name(config, bot),
+    )
+    events = _saved_events(config, saved.ids.channel_id)
+    moments = spoke = 0
+    for suggestion in rehearsal.replay(saved.messages, events):
+        moments += 1
+        spoke += suggestion.text is not None
+        if moments <= limit:
+            typer.echo(_describe(suggestion))
+    typer.echo(
+        f"{saved.ids.slug}: {len(saved.messages)} messages, {moments} moments, "
+        f"would have spoken at {spoke}. Nothing was posted."
+    )
+
+
+def _describe(suggestion: Suggestion) -> str:
+    moment = suggestion.moment
+    trigger = moment.trigger
+    if isinstance(trigger, ProcessedMessage):
+        cause = f'after "{trigger.message.text[:40]}"'
+    elif isinstance(trigger, ChannelEvent):
+        cause = f"on {trigger.kind.value}"
+    else:
+        cause = ""
+    said = (
+        f"-> {suggestion.text} ({suggestion.score:.2f})"
+        if suggestion.text
+        else f"-> stays quiet ({suggestion.dropped} of {suggestion.considered} unsafe)"
+    )
+    return f"{moment.at:%H:%M:%S} {moment.kind.value:<12} {cause} {said}"
 
 
 @app.command()
@@ -309,22 +360,46 @@ def bots_remove(name: str) -> None:
     _run_with_kick(run)
 
 
-def _read_saved_chat(
-    config: Settings, slug: str
-) -> tuple[ChannelIds, TextPipeline, ProfileBuilder]:
+@dataclass
+class _SavedChat:
+    ids: ChannelIds
+    pipeline: TextPipeline
+    builder: ProfileBuilder
+    messages: list[ProcessedMessage]
+
+
+def _read_saved_chat(config: Settings, slug: str) -> _SavedChat:
     ids = read_cache(config.channels_file).get(slug.removeprefix("@").lower())
     if ids is None:
         typer.echo(f"No saved chat for {slug}. Collect some first: kick-commenter collect {slug}")
         raise typer.Exit(1)
     pipeline = TextPipeline(LinguaGuesser())
-    builder = ProfileBuilder(ids.slug, pipeline.mix)
+    saved = _SavedChat(ids, pipeline, ProfileBuilder(ids.slug, pipeline.mix), [])
     store = ChatStore(config.chat_db)
     try:
         for message in store.messages(ids.channel_id):
-            builder.add(pipeline.process(message))
+            processed = pipeline.process(message)
+            saved.builder.add(processed)
+            saved.messages.append(processed)
     finally:
         store.close()
-    return ids, pipeline, builder
+    return saved
+
+
+def _saved_events(config: Settings, channel_id: int) -> list[ChannelEvent]:
+    store = ChatStore(config.chat_db)
+    try:
+        return list(store.events(channel_id))
+    finally:
+        store.close()
+
+
+def _bot_name(config: Settings, name: str | None) -> str:
+    # The name given, else the only saved bot's, else none (questions go unnoticed).
+    if name:
+        return name
+    bots = BotRegistry(config.bots_file).all()
+    return bots[0].name if len(bots) == 1 else ""
 
 
 def _pick_bot(config: Settings, name: str | None) -> BotAccount:

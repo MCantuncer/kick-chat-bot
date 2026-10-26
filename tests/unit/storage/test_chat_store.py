@@ -54,3 +54,21 @@ def test_messages_come_back_oldest_first(tmp_path: Path, chat_message: ChatMessa
     assert list(store.messages(chat_message.channel_id)) == [chat_message, later]
     assert list(store.messages(999)) == []
     store.close()
+
+
+def test_events_come_back_oldest_first(tmp_path: Path) -> None:
+    store = ChatStore(tmp_path / "chat.sqlite3")
+    raid = ChannelEvent(
+        channel_id=5, kind=ChannelEventKind.RAID, occurred_at=datetime(2026, 1, 1, 21, tzinfo=UTC)
+    )
+    sub = ChannelEvent(
+        channel_id=5,
+        kind=ChannelEventKind.SUBSCRIPTION,
+        occurred_at=datetime(2026, 1, 1, 20, tzinfo=UTC),
+    )
+    store.save_event(raid)
+    store.save_event(sub)
+
+    assert list(store.events(5)) == [sub, raid]
+    assert list(store.events(6)) == []
+    store.close()

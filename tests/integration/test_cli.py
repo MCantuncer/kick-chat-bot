@@ -348,3 +348,44 @@ def test_warmup_needs_collected_chat(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     assert result.exit_code == 1
     assert "collect ghost" in result.output
+
+
+def test_suggest_replays_saved_chat_without_posting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, chat_message: ChatMessage
+) -> None:
+    monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
+    save_chat(tmp_path, chat_message, "thetoxicparty", ["reis bugün başka"] * 60)
+    store = ChatStore(tmp_path / "chat.sqlite3")
+    burst_at = chat_message.sent_at + timedelta(minutes=4)
+    for n in range(12):
+        store.save_message(
+            chat_message.model_copy(
+                update={
+                    "message_id": f"burst{n}",
+                    "sender": chat_message.sender.model_copy(update={"user_id": 100 + n}),
+                    "text": "helal olsun kral",
+                    "sent_at": burst_at + timedelta(seconds=n / 2),
+                }
+            )
+        )
+    store.close()
+
+    result = runner.invoke(app, ["suggest", "thetoxicparty", "--bot", "golfwangtr"])
+
+    assert result.exit_code == 0, result.output
+    assert " hype " in result.output
+    assert "-> " in result.output
+    assert "thetoxicparty: 72 messages, 1 moments, would have spoken at 1." in result.output
+    assert "Nothing was posted." in result.output
+
+
+def test_suggest_with_no_chat_yet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KICK_COMMENTER_DATA_DIR", str(tmp_path))
+    ChannelLookup(httpx.AsyncClient(), tmp_path / "channels.json").remember(
+        ChannelIds(slug="quiet", channel_id=5, chatroom_id=1)
+    )
+
+    result = runner.invoke(app, ["suggest", "quiet"])
+
+    assert result.exit_code == 0, result.output
+    assert "No saved chat for quiet yet." in result.output
